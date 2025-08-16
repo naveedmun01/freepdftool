@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PDF Editor – Pree PDF Tool Pro</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo-dot"></div>
+      <div>
+        <h1 class="site-title">PDF Editor</h1>
+        <p class="brand-sub">Add text, highlight, draw rectangles — edits are applied in your browser.</p>
+      </div>
+    </div>
+    <nav class="nav">
+      <a href="index.html">Home</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Open PDF to Edit</h2>
+      <input id="fileInput" type="file" accept="application/pdf" />
+      <div class="row" style="margin-top:10px">
+        <button id="prevPage" class="btn">Prev</button>
+        <button id="nextPage" class="btn">Next</button>
+        <span id="pageInfo" class="muted small"></span>
+      </div>
+
+      <div class="toolbar" style="margin-top:12px">
+        <button class="btn" id="toolText">Text</button>
+        <button class="btn" id="toolRect">Rectangle</button>
+        <button class="btn" id="toolHigh">Highlight</button>
+        <button class="btn" id="undoBtn">Undo</button>
+        <button class="btn" id="redoBtn">Redo</button>
+        <input id="textValue" class="input" placeholder="Text to add" />
+        <button id="saveBtn" class="btn">Save Edited PDF</button>
+        <span id="editorMsg" class="muted small"></span>
+      </div>
+
+      <div class="editor-wrap" style="margin-top:12px; position:relative;">
+        <canvas id="pdfCanvas" style="display:block; background:white; max-width:100%"></canvas>
+        <canvas id="overlay" style="position:absolute; left:0; top:0;"></canvas>
+      </div>
+      <p class="muted small">Workflow: open PDF → navigate pages → choose tool (text/rect/highlight) → click/drag to add → Save to bake overlays into PDF pages.</p>
+    </section>
+  </main>
+
+  <!-- libs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+
+  <!-- editor script -->
+  <script>
+/* PDF Editor: multi-page overlay, undo/redo per page, bake overlays into PDF pages via pdf-lib
+   Note: this is a client-side editor for light editing (text, rectangle, highlight).
+*/
+
+pdfjsLib = window['pdfjs-dist/build/pdf'] || window['pdfjs-dist/build/pdf'];
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js';
+
+const fileInput = document.getElementById('fileInput');
+const canvas = document.getElementById('pdfCanvas'), ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay'), octx = overlay.getContext('2d');
+const pageInfo = document.getElementById('pageInfo');
+const msg = document.getElementById('editorMsg');
+
+let pdfDoc = null, currPage = 1, scale = 1.2, pageCount = 0;
+let pageRenderSizes = []; // {width,height} in pdf points
+let history = {}; // history[pageNumber] = [dataURL,...]
+let redoStack = {}; // redo[pageNumber] = [...]
+
+let tool = 'text';
+function setTool(t){ tool=t; msg.textContent = 'Tool: '+t; }
+document.getElementById('toolText').onclick = ()=> setTool('text');
+document.getElementById('toolRect').onclick = ()=> setTool('rect');
+document.getElementById('toolHigh').onclick = ()=> setTool('high');
+
+document.getElementById('undoBtn').onclick = ()=>{
+  const h = history[currPage] || [];
+  if(h.length>1){
+    const last = h.pop();
+    (redoStack[currPage] = redoStack[currPage]||[]).push(last);
+    applyHistoryFrame(currPage);
+  } else if(h.length===1){
+    // clear overlays
+    redoStack[currPage] = redoStack[currPage]||[];
+    redoStack[currPage].push(h.pop());
+    applyHistoryFrame(currPage);
+  }
+};
+document.getElementById('redoBtn').onclick = ()=>{
+  const r = redoStack[currPage]||[];
+  if(r.length){
+    const frame = r.pop();
+    (history[currPage] = history[currPage]||[]).push(frame);
+    applyHistoryFrame(currPage);
+  }
+};
+
+document.getElementById('prevPage').onclick = async ()=>{
+  if(currPage>1){ currPage--; await renderPage(currPage); }
+};
+document.getElementById('nextPage').onclick = async ()=>{
+  if(currPage<pageCount){ currPage++; await renderPage(currPage); }
+};
+
+fileInput.addEventListener('change', async (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const ab = await f.arrayBuffer();
+  const loading = pdfjsLib.getDocument({data:ab});
+  pdfDoc = await loading.promise;
+  pageCount = pdfDoc.numPages;
+  // store sizes via pdf-lib
+  const pdoc = await PDFLib.PDFDocument.load(ab);
+  pageRenderSizes = [];
+  for(let i=0;i<pdoc.getPageCount();i++){
+    const p = pdoc.getPage(i);
+    const { width, height } = p.getSize();
+    pageRenderSizes.push({width, height});
+  }
+  history = {}; redoStack = {};
+  currPage = 1;
+  await renderPage(currPage);
+});
+
+async function renderPage(num){
+  const page = await pdfDoc.getPage(num);
+  const viewport = page.getViewport({scale});
+  // size canvases
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
+  overlay.width = canvas.width; overlay.height = canvas.height;
+  // render base page
+  const renderContext = { canvasContext: ctx, viewport };
+  await page.render(renderContext).promise;
+  // draw overlays if existing
+  applyHistoryFrame(num);
+  pageInfo.textContent = `Page ${num} / ${pageCount}`;
+}
+
+function applyHistoryFrame(pageNum){
+  octx.clearRect(0,0,overlay.width, overlay.height);
+  const frames = history[pageNum] || [];
+  if(frames.length){
+    const dataUrl = frames[frames.length-1];
+    const img = new Image();
+    img.onload = ()=> octx.drawImage(img, 0, 0, overlay.width, overlay.height);
+    img.src = dataUrl;
+  }
+}
+
+// overlay interactions
+let isDown=false, sx=0, sy=0;
+overlay.addEventListener('mousedown', (e)=>{
+  const r = overlay.getBoundingClientRect();
+  sx = e.clientX - r.left; sy = e.clientY - r.top; isDown = true;
+  if(tool==='text'){ /* we wait for click-up to draw text */ }
+});
+overlay.addEventListener('mousemove', (e)=>{
+  if(!isDown) return;
+  const r = overlay.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  if(tool==='rect' || tool==='high'){
+    // draw temporary box
+    applyHistoryFrame(currPage);
+    octx.strokeStyle = tool==='rect' ? 'rgba(255,200,0,0.95)' : 'rgba(255,240,0,0.4)';
+    octx.lineWidth = tool==='rect' ? 3 : 30;
+    if(tool==='high') octx.globalCompositeOperation = 'multiply';
+    octx.strokeRect(sx, sy, x-sx, y-sy);
+    octx.globalCompositeOperation = 'source-over';
+  }
+});
+overlay.addEventListener('mouseup', (e)=>{
+  if(!isDown) return;
+  isDown = false;
+  const r = overlay.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  if(tool==='text'){
+    const t = document.getElementById('textValue').value || 'Text';
+    octx.fillStyle = 'rgba(0,0,0,0.95)';
+    octx.font = '18px Arial';
+    octx.fillText(t, x, y);
+  } else if(tool==='rect'){
+    octx.strokeStyle = 'rgba(255,200,0,0.95)'; octx.lineWidth = 3;
+    octx.strokeRect(sx, sy, x-sx, y-sy);
+  } else if(tool==='high'){
+    octx.fillStyle = 'rgba(255,240,0,0.28)';
+    octx.fillRect(sx, sy, x-sx, y-sy);
+  }
+  // save overlay frame to history
+  const dataUrl = overlay.toDataURL('image/png');
+  (history[currPage] = history[currPage]||[]).push(dataUrl);
+  // clear redo for this page
+  redoStack[currPage] = [];
+});
+
+document.getElementById('saveBtn').addEventListener('click', async ()=>{
+  if(!fileInput.files[0]){ alert('Open a PDF first'); return; }
+  msg.textContent = 'Saving…';
+  const ab = await fileInput.files[0].arrayBuffer();
+  const pdoc = await PDFLib.PDFDocument.load(ab);
+  // for each page that has overlays, embed overlay PNG and draw over page
+  for(let p=1;p<=pdoc.getPageCount();p++){
+    const frames = history[p];
+    if(!frames || !frames.length) continue;
+    const dataUrl = frames[frames.length-1];
+    // convert dataUrl -> bytes
+    const pngBytes = await (await fetch(dataUrl)).arrayBuffer();
+    const png = await pdoc.embedPng(pngBytes);
+    const page = pdoc.getPage(p-1);
+    // map overlay pixel size to PDF page size:
+    const overlayCanvasW = overlay.width, overlayCanvasH = overlay.height;
+    // We rendered all pages to same overlay size when viewing — here we use that overlay size per page
+    const size = pageRenderSizes[p-1] || {width: page.getWidth(), height: page.getHeight()};
+    const scaleX = size.width / overlayCanvasW;
+    const scaleY = size.height / overlayCanvasH;
+    // Draw overlay at 0,0 spanning full page
+    page.drawImage(png, { x: 0, y: 0, width: overlayCanvasW * scaleX, height: overlayCanvasH * scaleY });
+  }
+  const out = await pdoc.save({ useObjectStreams: true });
+  const blob = new Blob([out], { type: 'application/pdf' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'edited.pdf'; a.click();
+  msg.textContent = 'Saved edited.pdf';
+});
+  </script>
+</body>
+</html>
