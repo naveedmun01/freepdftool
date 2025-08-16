@@ -2,61 +2,100 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PDF Editor</title>
-  <link rel="stylesheet" href="style.css">
+  <title>PDF Editor - Pree PDF Tool Pro</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
   <style>
-    #pdf-canvas {
-      border: 1px solid #ddd;
-      width: 100%;
-      min-height: 500px;
-      background: #fff;
-    }
-    .toolbar button {
-      margin: 5px;
-      padding: 6px 12px;
-      border-radius: 5px;
-      border: none;
-      cursor: pointer;
-      background: #4f46e5;
-      color: white;
-    }
-    .toolbar input {
-      padding: 5px;
-      margin-left: 10px;
-    }
+    body { background:#0d1117; color:white; font-family:Arial; text-align:center; }
+    #pdf-canvas { border:1px solid #555; margin-top:15px; background:white; }
+    .toolbar button { margin:5px; padding:8px 12px; border:none; border-radius:5px; cursor:pointer; }
+    .toolbar { margin:15px 0; }
   </style>
 </head>
 <body>
-  <nav>
-    <ul>
-      <li><a href="index.html">Home</a></li>
-      <li><a href="merge.html">Merge PDF</a></li>
-      <li><a href="split.html">Split PDF</a></li>
-      <li><a href="compress.html">Compress PDF</a></li>
-      <li><a href="jpeg-to-pdf.html">JPEG to PDF</a></li>
-      <li><a href="editor.html">PDF Editor</a></li>
-    </ul>
-  </nav>
+  <h1>📄 PDF Editor</h1>
+  <input type="file" id="file-input" accept="application/pdf"><br>
 
-  <div class="container">
-    <h2>Edit PDF</h2>
-    <input type="file" id="pdf-upload" />
-    <div class="toolbar">
-      <button id="prev-page">Prev</button>
-      <button id="next-page">Next</button>
-      <button id="add-text">Text</button>
-      <button id="add-rect">Rectangle</button>
-      <button id="add-highlight">Highlight</button>
-      <button id="undo">Undo</button>
-      <button id="save-pdf">Save Edited PDF</button>
-      <input type="text" id="text-input" placeholder="Enter text here">
-    </div>
-    <canvas id="pdf-canvas"></canvas>
+  <div class="toolbar">
+    <button onclick="prevPage()">⬅ Prev</button>
+    <button onclick="nextPage()">Next ➡</button>
+    <button onclick="setMode('text')">Text</button>
+    <button onclick="setMode('rect')">Rectangle</button>
+    <button onclick="setMode('highlight')">Highlight</button>
+    <button onclick="undo()">Undo</button>
+    <button onclick="savePDF()">💾 Save Edited PDF</button>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="script-editor.js"></script>
-</body>
-</html>
+  <canvas id="pdf-canvas" width="600"></canvas>
+  <input type="text" id="text-input" placeholder="Enter text..." style="margin-top:10px;">
+
+  <script>
+    let pdfDoc=null,pageNum=1,canvas=document.getElementById("pdf-canvas"),ctx=canvas.getContext("2d");
+    let edits=[],mode=null;
+
+    document.getElementById("file-input").addEventListener("change", async (e)=>{
+      let file=e.target.files[0];
+      let fileReader=new FileReader();
+      fileReader.onload=async function(){
+        let typedarray=new Uint8Array(this.result);
+        pdfDoc=await pdfjsLib.getDocument(typedarray).promise;
+        renderPage(pageNum);
+      };
+      fileReader.readAsArrayBuffer(file);
+    });
+
+    function renderPage(num){
+      pdfDoc.getPage(num).then(function(page){
+        let viewport=page.getViewport({scale:1.5});
+        canvas.height=viewport.height; canvas.width=viewport.width;
+        let renderContext={canvasContext:ctx,viewport:viewport};
+        page.render(renderContext).promise.then(()=>drawEdits());
+      });
+    }
+
+    function prevPage(){ if(pageNum<=1)return; pageNum--; renderPage(pageNum); }
+    function nextPage(){ if(pageNum>=pdfDoc.numPages)return; pageNum++; renderPage(pageNum); }
+
+    function setMode(m){ mode=m; }
+
+    canvas.addEventListener("click",(e)=>{
+      let rect=canvas.getBoundingClientRect();
+      let x=e.clientX-rect.left,y=e.clientY-rect.top;
+      if(mode==="text"){
+        let text=document.getElementById("text-input").value;
+        edits.push({page:pageNum,type:"text",x,y,text});
+      }else if(mode==="rect"){
+        edits.push({page:pageNum,type:"rect",x,y,w:100,h:40});
+      }else if(mode==="highlight"){
+        edits.push({page:pageNum,type:"highlight",x,y,w:120,h:20});
+      }
+      renderPage(pageNum);
+    });
+
+    function drawEdits(){
+      edits.forEach(edit=>{
+        if(edit.page!==pageNum) return;
+        if(edit.type==="text"){
+          ctx.fillStyle="red"; ctx.font="16px Arial";
+          ctx.fillText(edit.text,edit.x,edit.y);
+        }else if(edit.type==="rect"){
+          ctx.strokeStyle="blue"; ctx.lineWidth=2;
+          ctx.strokeRect(edit.x,edit.y,edit.w,edit.h);
+        }else if(edit.type==="highlight"){
+          ctx.fillStyle="yellow"; ctx.globalAlpha=0.4;
+          ctx.fillRect(edit.x,edit.y,edit.w,edit.h);
+          ctx.globalAlpha=1.0;
+        }
+      });
+    }
+
+    function undo(){ edits.pop(); renderPage(pageNum); }
+
+    async function savePDF(){
+      let file=document.getElementById("file-input").files[0];
+      let arrayBuffer=await file.arrayBuffer();
+      let pdfDocLib=await PDFLib.PDFDocument.load(arrayBuffer);
+      let pages=pdfDocLib.getPages();
+
+      for(let edit of edits){
+        let page=pages
