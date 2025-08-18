@@ -4,19 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>✨ Pree PDF Tool Pro – Free PDF Tools by Mun Developers</title>
-  <meta name="description" content="Pree PDF Tool Pro — Merge PDFs, Split pages, Compress PDF, Convert JPG to PDF, and Edit PDFs directly in your browser. By Mun Developers, Karachi." />
-  <meta name="keywords" content="PDF merge, PDF split, JPG to PDF, compress PDF, edit PDF, Mun Developers, Karachi" />
-  <meta name="robots" content="index, follow" />
-
-  <!-- Open Graph -->
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="Pree PDF Tool Pro – Free PDF Tools" />
-  <meta property="og:description" content="Merge, Split, Compress, Edit, and JPG→PDF in your browser. No upload needed." />
-  <meta property="og:image" content="og-image.png" />
-
-  <!-- AdSense placeholder (replace ca-pub-XXXXXXXXXXXX with your ID after approval) -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXX"
-    crossorigin="anonymous"></script>
+  <meta name="description" content="Pree PDF Tool Pro — Merge PDFs, Split pages, Compress PDF, Convert JPG to PDF, PDF Editor, and PDF to Word directly in your browser. By Mun Developers, Karachi." />
+  <meta name="keywords" content="PDF merge, PDF split, JPG to PDF, compress PDF, edit PDF, convert PDF to Word, Mun Developers, Karachi" />
 
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -34,23 +23,13 @@
       <a href="#merge">Merge</a>
       <a href="#split">Split</a>
       <a href="#compress">Compress</a>
-      <a href="pdf-editor.html">PDF Editor</a>
+      <a href="#editor">Editor</a>
+      <a href="#pdf2word">PDF → Word</a>
     </nav>
   </header>
 
   <main class="container">
     <div class="notice">Privacy: All processing happens inside your browser. Files are not uploaded to any server.</div>
-
-    <!-- Ad placeholder (optional) -->
-    <div class="ad-slot">
-      <ins class="adsbygoogle"
-           style="display:block"
-           data-ad-client="ca-pub-XXXXXXXXXXXX"
-           data-ad-slot="1234567890"
-           data-ad-format="auto"
-           data-full-width-responsive="true"></ins>
-      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-    </div>
 
     <!-- JPG to PDF -->
     <section id="jpg" class="card">
@@ -89,7 +68,7 @@
     <!-- Compress PDF -->
     <section id="compress" class="card">
       <h2>Compress PDF</h2>
-      <p class="muted">Two modes: <b>Fast</b> (re-save) and <b>Strong</b> (rasterize pages to JPEG then rebuild — flattens PDF).</p>
+      <p class="muted">Choose Fast or Strong compression.</p>
       <input id="compFile" type="file" accept="application/pdf" />
       <div class="row">
         <label><input type="radio" name="cmode" value="fast" checked> Fast</label>
@@ -97,25 +76,40 @@
         <button id="btnCompress" class="btn">Compress &amp; Download</button>
         <span id="compMsg" class="muted small"></span>
       </div>
-      <div id="strongOptions" class="muted small">Quality (strong mode): <input id="quality" type="range" min="30" max="90" value="70"></div>
+      <div id="strongOptions" class="muted small">Quality: <input id="quality" type="range" min="30" max="90" value="70"></div>
     </section>
 
-    <section class="card">
-      <h3>About Mun Developers</h3>
-      <p class="muted">We build simple, fast, privacy-first PDF tools. Contact: <a href="tel:+923333155155">+92 33 33 155 155</a></p>
+    <!-- PDF Editor -->
+    <section id="editor" class="card">
+      <h2>PDF Editor</h2>
+      <p class="muted">Upload a PDF, add text, then download updated file.</p>
+      <input id="editFile" type="file" accept="application/pdf" />
+      <input id="editText" class="input" type="text" placeholder="Enter text to add..." />
+      <div class="row">
+        <button id="btnEdit" class="btn">Add Text &amp; Download</button>
+        <span id="editMsg" class="muted small"></span>
+      </div>
+    </section>
+
+    <!-- PDF to Word -->
+    <section id="pdf2word" class="card">
+      <h2>PDF → Word</h2>
+      <p class="muted">Upload a PDF and convert it into an editable Word (.docx) file.</p>
+      <input id="wordFile" type="file" accept="application/pdf" />
+      <div class="row">
+        <button id="btnWord" class="btn">Convert &amp; Download</button>
+        <span id="wordMsg" class="muted small"></span>
+      </div>
     </section>
 
     <footer class="footer">
-      <p>© <span id="year"></span> Pree PDF Tool Pro | <a href="privacy.html">Privacy Policy</a> | <a href="terms.html">Terms &amp; Conditions</a></p>
+      <p>© <span id="year"></span> Pree PDF Tool Pro | Privacy First</p>
     </footer>
   </main>
 
   <!-- libraries -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" crossorigin="anonymous"></script>
-  <!-- pdf.js for strong compression -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
-
-  <!-- main site script -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.0.0/docx.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
